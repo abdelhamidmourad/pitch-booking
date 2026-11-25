@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f8a4c"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="حجز ملعب">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg">
+<title>حجز ملعب</title>
+<style>
+:root{--bg:#f4f6f5;--fg:#1b2b22;--card:#fff;--ac:#1f8a4c;--bd:#dde5e0;--mut:#6b7c72}
+@media(prefers-color-scheme:dark){:root{--bg:#121a15;--fg:#e8f0ea;--card:#1b261f;--bd:#2c3b31;--mut:#9bb0a3}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Tahoma,sans-serif;background:var(--bg);color:var(--fg);padding-top:env(safe-area-inset-top,0px)}
+header{background:var(--ac);color:#fff;padding:14px 16px;font-weight:700;font-size:18px}
+#view{padding:16px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:560px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:10px 4px;font:inherit;font-size:13px}
+nav button.on{color:var(--ac);font-weight:700}
+nav[hidden],#toast[hidden]{display:none}
+.f{width:100%;padding:12px;margin-bottom:12px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg);font:inherit}
+.b{width:100%;padding:12px;border:0;border-radius:8px;background:var(--ac);color:#fff;font:inherit;font-weight:700;margin-bottom:8px}
+.b.o{background:none;color:var(--ac);border:1px solid var(--ac)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.h{padding:12px 0;border-radius:8px;border:1px solid var(--ac);background:none;color:var(--ac);font:inherit;font-weight:700}
+.h:disabled{opacity:.4;border-color:var(--bd);color:var(--mut);text-decoration:line-through}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:12px}
+.mut{color:var(--mut)}hr{border:0;border-top:1px solid var(--bd);margin:20px 0}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));background:#222;color:#fff;padding:12px;border-radius:8px;text-align:center}
+</style></head><body>
+<header>⚽ حجز ملعب</header>
+<main id="view"></main>
+<nav hidden><button data-tab="book">📅 احجز</button><button data-tab="mine">📋 حجوزاتي</button><button data-tab="me">👤 حسابي</button></nav>
+<div id="toast" hidden></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+let token=null;try{token=localStorage.getItem('t')}catch{}
+const st={tab:'book',reg:false,loading:false,pitches:[],pitch:null,date:ymd(new Date()),hours:[],mine:[],me:null};
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.i);toast.i=setTimeout(()=>t.hidden=true,2800)}
+async function api(m,p,b){
+ let r;try{r=await fetch(p,{method:m,headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},body:b?JSON.stringify(b):undefined})}catch{throw new Error('تعذر الاتصال بالخادم')}
+ const d=await r.json().catch(()=>({}));
+ if(!r.ok){if(r.status===401&&d.error==='login required')setToken(null);throw new Error(d.error||'حدث خطأ')}
+ return d}
+function setToken(t){token=t;try{t?localStorage.setItem('t',t):localStorage.removeItem('t')}catch{}st.reg=false;st.pitches=[];st.mine=[];st.me=null;go('book')}
+const authV=()=>`<div style="text-align:center;font-size:56px">⚽</div><h2 style="text-align:center">${st.reg?'إنشاء حساب':'تسجيل الدخول'}</h2>
+${st.reg?'<input class="f" id="n" placeholder="الاسم" autocomplete="name">':''}
+<input class="f" id="e" type="email" placeholder="البريد الإلكتروني" autocomplete="email">
+${st.reg?'<input class="f" id="p" type="tel" placeholder="رقم الهاتف">':''}
+<input class="f" id="w" type="password" placeholder="كلمة المرور" autocomplete="${st.reg?'new-password':'current-password'}">
+<button class="b" data-a="auth">${st.reg?'تسجيل':'دخول'}</button>
+<button class="b o" data-a="toggle">${st.reg?'لدي حساب بالفعل':'مستخدم جديد؟ أنشئ حساب'}</button>`;
+const bookV=()=>{if(!st.pitches.length)return '<p class="mut">لا توجد ملاعب متاحة</p>';
+ const free=st.hours.some(h=>h.available);
+ return `<label class="mut">الملعب</label><select class="f" id="pi">${st.pitches.map(p=>`<option value="${p.id}"${p.id===st.pitch?' selected':''}>${esc(p.name)} - ${p.price} جنيه/ساعة</option>`).join('')}</select>
+ <label class="mut">التاريخ</label><input class="f" id="dt" type="date" value="${st.date}" min="${ymd(new Date())}" max="${ymd(new Date(Date.now()+60*864e5))}">
+ <p class="mut">المواعيد المتاحة</p><div class="grid">${st.hours.map(h=>`<button class="h" data-a="book" data-h="${h.hour}"${h.available?'':' disabled'}>${h.hour}:00</button>`).join('')}</div>
+ ${st.hours.length&&!free?'<p class="mut">لا توجد مواعيد متاحة في هذا اليوم</p>':''}`};
+const mineV=()=>st.mine.length?st.mine.map(b=>`<div class="card"><b>${esc(b.pitch_name)}</b><div class="mut">${esc(b.date)} - ${b.hour}:00 - ${b.price} جنيه</div><div>${b.status==='confirmed'?'✅ مؤكد':'❌ ملغي'}</div>
+ ${b.status!=='confirmed'?'':b.can_cancel?`<button class="b o" data-a="cancel" data-id="${b.id}" style="margin-top:8px">إلغاء الحجز</button>`:'<div class="mut">🔒 لا يمكن الإلغاء قبل الموعد بأقل من ساعتين</div>'}</div>`).join(''):'<p class="mut" style="text-align:center">لا توجد حجوزات</p>';
+const meV=()=>st.me?`<p class="mut">${esc(st.me.email)}</p><input class="f" id="mn" value="${esc(st.me.name)}" placeholder="الاسم"><input class="f" id="mp" type="tel" value="${esc(st.me.phone)}" placeholder="رقم الهاتف"><button class="b" data-a="save">حفظ البيانات</button>
+<hr><b>تغيير كلمة المرور</b><br><br><input class="f" id="po" type="password" placeholder="كلمة المرور الحالية"><input class="f" id="pn" type="password" placeholder="الجديدة (6 أحرف على الأقل)"><button class="b o" data-a="pw">تغيير</button>
+<hr><button class="b o" data-a="out">تسجيل الخروج</button>`:'';
+function render(){
+ $('nav').hidden=!token;
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===st.tab));
+ $('#view').innerHTML=!token?authV():st.loading?'<p class="mut">جارٍ التحميل...</p>':({book:bookV,mine:mineV,me:meV})[st.tab]()}
+async function hours(){if(!st.pitch){st.hours=[];return}st.hours=(await api('GET',`/api/availability?pitch_id=${st.pitch}&date=${st.date}`)).hours}
+async function go(tab){
+ st.tab=tab||st.tab;st.loading=!!token;render();if(!token)return;
+ try{if(st.tab==='book'){if(!st.pitches.length){st.pitches=await api('GET','/api/pitches');st.pitch=st.pitches[0]?.id}await hours()}
+  if(st.tab==='mine')st.mine=await api('GET','/api/bookings/mine');
+  if(st.tab==='me')st.me=await api('GET','/api/me')}catch(e){toast(e.message)}
+ st.loading=false;render()}
+async function reloadHours(){try{await hours()}catch(e){toast(e.message)}render()}
+const val=id=>$('#'+id).value;
+document.addEventListener('change',e=>{
+ if(e.target.id==='pi'){st.pitch=+e.target.value;reloadHours()}
+ if(e.target.id==='dt'&&e.target.value){st.date=e.target.value;reloadHours()}});
+document.addEventListener('click',async e=>{
+ const nb=e.target.closest('[data-tab]');if(nb)return go(nb.dataset.tab);
+ const t=e.target.closest('[data-a]');if(!t)return;
+ try{switch(t.dataset.a){
+  case'toggle':st.reg=!st.reg;render();break;
+  case'auth':{const d=await api('POST',st.reg?'/api/register':'/api/login',{name:st.reg?val('n'):'',email:val('e'),phone:st.reg?val('p'):'',password:val('w')});setToken(d.token);break}
+  case'book':{const h=+t.dataset.h,pt=st.pitches.find(p=>p.id===st.pitch);
+   if(!confirm(`${pt.name}\n${st.date} - الساعة ${h}:00\nالسعر: ${pt.price} جنيه\nتأكيد الحجز؟`))return;
+   try{await api('POST','/api/bookings',{pitch_id:st.pitch,date:st.date,hour:h});toast('تم الحجز بنجاح')}catch(x){toast(x.message)}
+   reloadHours();break}
+  case'cancel':if(confirm('إلغاء الحجز؟')){await api('DELETE','/api/bookings/'+t.dataset.id);toast('تم الإلغاء');go('mine')}break;
+  case'save':await api('PUT','/api/me',{name:val('mn'),phone:val('mp')});toast('تم حفظ البيانات');break;
+  case'pw':await api('PUT','/api/me/password',{old_password:val('po'),new_password:val('pn')});$('#po').value=$('#pn').value='';toast('تم تغيير كلمة المرور');break;
+  case'out':setToken(null);break}}catch(x){toast(x.message)}});
+go('book');
+</script></body></html>
